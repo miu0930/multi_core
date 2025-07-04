@@ -27,16 +27,11 @@ for fname in os.listdir(result_dir):
     access_match = re.search(r"Access time\s*\(ns\):\s*([\d.]+)", content)
     access_time = float(access_match.group(1)) if access_match else None
 
-    # Read Energy 抽出
-    energy_match = re.search(r"Read Energy\s*\(nJ\):\s*([\d.]+)", content)
-    read_energy = float(energy_match.group(1)) if energy_match else None
-
     results.append({
         "Cache Size (KB)": cache_kb,
         "Associativity": assoc,
         "Block Size (B)": block,
         "Access Time (ns)": access_time,
-        "Read Energy (nJ)": read_energy
     })
 
 # CSV出力
