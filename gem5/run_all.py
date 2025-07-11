@@ -2,14 +2,15 @@ import pandas as pd
 import subprocess
 import os
 import math
+import re # stats.txtを解析するために正規表現モジュールをインポート
 
 # ===============================================================
-# パラメータ設定
+# パラメータ設定 (Parameter Settings)
 # ===============================================================
 GEM5_PATH = "./build/ALPHA/gem5.opt"
 GEM5_CONFIG_SCRIPT = "./configs/example/se.py"
 INPUT_PARAMETERS_CSV = './filtered_data.csv' # または './data.csv'
-BASE_RESULTS_DIR = "./results_simulations"
+BASE_RESULTS_DIR = "./results_simulations" # 元のディレクトリ名に戻す
 
 # SPLASH-2 ベンチマーク定義
 # 各ベンチマークに固有の skip_threshold_seconds を追加
@@ -78,14 +79,16 @@ BASE_L2_ASSOC = 8
 MIN_CPU_FREQ_TO_CONSIDER_GHZ = 0.7
 
 # ===============================================================
-# シミュレーション実行ロジック
+# シミュレーション実行ロジック (Simulation Execution Logic)
 # ===============================================================
 def run_simulation():
+    # gem5実行ファイルの存在チェック (Check for gem5 executable)
     if not os.path.exists(GEM5_PATH):
         print(f"エラー: gem5実行ファイルが見つかりません。パスを確認してください: {GEM5_PATH}")
         print("gem5をビルドまたはパスを修正してください。")
         return
 
+    # gem5設定スクリプトの存在チェック (Check for gem5 config script)
     if not os.path.exists(GEM5_CONFIG_SCRIPT):
         print(f"エラー: gem5設定スクリプトが見つかりません。パスを確認してください: {GEM5_CONFIG_SCRIPT}")
         return
@@ -100,19 +103,24 @@ def run_simulation():
         print(f"CSVファイルの読み込み中にエラーが発生しました: {e}")
         return
 
+    # 結果ディレクトリの作成 (Create results directory)
     os.makedirs(BASE_RESULTS_DIR, exist_ok=True)
 
     total_simulations = len(df_params) * len(BENCHMARKS)
     current_sim_count = 0
 
     for index, row in df_params.iterrows():
-        core_num = row['Core Number']
-        cpu_clock_ghz = row['CPU clock (GHz)']
-        l1_size_kb = row['L1 Cache Size (KB)']
-        l1_assoc = row['L1 Associativity']
-        l2_size_kb = row['L2 Cache Size (KB)']
-        l2_assoc = row['L2 Associativity']
-        l2_latency_cycles = row['L2 latency (cycles)']
+        # CSVから読み込んだ値を適切な型に変換 (Convert values read from CSV to appropriate types)
+        core_num = int(row['Core Number'])
+        cpu_clock_ghz = float(row['CPU clock (GHz)']) # CPUクロックはfloatのまま
+        l1_size_kb = int(row['L1 Cache Size (KB)'])
+        l1_assoc = int(row['L1 Associativity'])
+        l2_size_kb = int(row['L2 Cache Size (KB)'])
+        l2_assoc = int(row['L2 Associativity'])
+        # L2 latencyはCSVでfloat('inf')になる可能性があるので、int()変換前にチェック
+        l2_latency_cycles_raw = row['L2 latency (cycles)']
+        l2_latency_cycles = int(l2_latency_cycles_raw) if l2_latency_cycles_raw != float('inf') else float('inf')
+
 
         if l2_latency_cycles == float('inf'):
             print(f"スキップ: L2レイテンシが無限大の構成 (Core={core_num}, L1={l1_size_kb}KB, L2={l2_size_kb}KB)。")
@@ -152,6 +160,15 @@ def run_simulation():
                     print(f"  CPU周波数が0のため、実行時間は無限大と予測されます。")
                     continue
 
+            cmd_base = bench_info['CMD']
+            # ベンチマーク実行ファイルの存在チェック (Check for benchmark executable)
+            if not os.path.exists(cmd_base):
+                print(f"エラー: ベンチマーク実行ファイルが見つかりません。パスを確認してください: {cmd_base}")
+                print(f"このシミュレーションはスキップされます: {bench_name} (Core={core_num}, L1={l1_size_kb}KB, L2={l2_size_kb}KB)")
+                continue
+
+            cmd_options = bench_info['OPTIONS_FORMAT'].format(CORE=core_num)
+
             # 各シミュレーションの出力ディレクトリを生成
             out_dir_name = (
                 f"core{core_num}_L1-{l1_size_kb}KB-A{l1_assoc}_"
@@ -160,56 +177,85 @@ def run_simulation():
             full_out_dir = os.path.join(BASE_RESULTS_DIR, out_dir_name)
             os.makedirs(full_out_dir, exist_ok=True)
 
-            cmd_base = bench_info['CMD']
-            cmd_options = bench_info['OPTIONS_FORMAT'].format(CORE=core_num)
-
             gem5_command_args = [
                 GEM5_PATH,
                 "-d", full_out_dir,
                 GEM5_CONFIG_SCRIPT,
-                "-n", str(core_num),
+                "-n", str(core_num), # intに変換したcore_numを使用
                 "--cpu-type=detailed",
                 "--cpu-clock=" + str(cpu_clock_ghz) + "GHz",
                 "--mem-type=SimpleMemory",
                 "--caches",
                 "--l2cache",
-                "--l1d_size=" + str(l1_size_kb) + "kB",
-                "--l1d_assoc=" + str(l1_assoc),
-                "--l2_size=" + str(l2_size_kb) + "kB",
-                "--l2_assoc=" + str(l2_assoc),
-                "--l2_latency=" + str(int(l2_latency_cycles)),
+                "--l1d_size=" + str(l1_size_kb) + "kB", # intに変換したl1_size_kbを使用
+                "--l1d_assoc=" + str(l1_assoc),         # intに変換したl1_assocを使用
+                "--l2_size=" + str(l2_size_kb) + "kB",   # intに変換したl2_size_kbを使用
+                "--l2_assoc=" + str(l2_assoc),           # intに変換したl2_assocを使用
+                "--l2_latency=" + str(l2_latency_cycles), # intに変換したl2_latency_cyclesを使用
                 "-c", cmd_base
             ]
             
-            if bench_name == "fmm":
-                full_command_str = " ".join(gem5_command_args) + f" {cmd_options}"
-                print(f"\n({current_sim_count}/{total_simulations}) Running FMM simulation: {out_dir_name}")
-                if predicted_time_seconds is not None:
-                     print(f"  予測実行時間: {predicted_time_seconds:.2f}秒。")
-                print(f"  Command: {full_command_str}")
-                try:
-                    subprocess.run(full_command_str, shell=True, check=True, executable='/bin/bash')
-                except subprocess.CalledProcessError as e:
-                    print(f"エラー: FMMシミュレーション中に問題が発生しました (Exit Code: {e.returncode})")
-                    print(f"  コマンド: {e.cmd}")
-                    if e.stdout: print(f"  stdout: {e.stdout.decode().strip()}")
-                    if e.stderr: print(f"  stderr: {e.stderr.decode().strip()}")
-            else:
-                gem5_command_args.extend(["-o", cmd_options])
-                
-                print(f"\n({current_sim_count}/{total_simulations}) Running simulation: {out_dir_name}")
-                if predicted_time_seconds is not None:
-                    print(f"  予測実行時間: {predicted_time_seconds:.2f}秒。")
-                print(f"  Command: {' '.join(gem5_command_args)}")
-                try:
-                    subprocess.run(gem5_command_args, check=True)
-                except subprocess.CalledProcessError as e:
-                    print(f"エラー: シミュレーション中に問題が発生しました (Exit Code: {e.returncode})")
-                    print(f"  コマンド: {' '.join(e.cmd)}")
-                    if e.stdout: print(f"  stdout: {e.stdout.decode().strip()}")
-                    if e.stderr: print(f"  stderr: {e.stderr.decode().strip()}")
-            
-            print(f"シミュレーション '{out_dir_name}' 完了。結果は '{full_out_dir}' に保存されました。")
+            print(f"\n--- シミュレーション開始 ({current_sim_count}/{total_simulations}) ---")
+            print(f"  設定: {out_dir_name}")
+            if predicted_time_seconds is not None:
+                print(f"  予測実行時間: {predicted_time_seconds:.2f}秒。")
+            print(f"  出力ディレクトリ: {full_out_dir}")
+
+            try:
+                # fmmベンチマークは入力リダイレクトが必要なため、shell=Trueで実行
+                if bench_name == "fmm":
+                    full_command_str = " ".join(gem5_command_args) + f" {cmd_options}"
+                    print(f"  コマンド: {full_command_str}")
+                    result = subprocess.run(
+                        full_command_str,
+                        shell=True,
+                        executable='/bin/bash', # 明示的にbashを使用
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
+                else:
+                    # その他のベンチマークは -o オプションで引数を渡す
+                    gem5_command_args.extend(["-o", cmd_options])
+                    print(f"  コマンド: {' '.join(gem5_command_args)}")
+                    result = subprocess.run(
+                        gem5_command_args,
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
+
+                if result.returncode != 0:
+                    print(f"エラー: gem5シミュレーションが非ゼロの終了コードで終了しました: {result.returncode}")
+                    if result.stdout: print(f"  gem5 STDOUT:\n{result.stdout}")
+                    if result.stderr: print(f"  gem5 STDERR:\n{result.stderr}")
+                    print("上記gem5の出力メッセージを確認してください。")
+                    continue # 次のシミュレーションへ
+
+                # stats.txtから実行時間を読み込む (Read execution time from stats.txt)
+                stats_file_path = os.path.join(full_out_dir, 'stats.txt')
+                sim_seconds = "N/A"
+                if os.path.exists(stats_file_path) and os.path.getsize(stats_file_path) > 0:
+                    with open(stats_file_path, 'r') as f:
+                        for line in f:
+                            # sim_secondsの行を正規表現で検索 (Search for sim_seconds line with regex)
+                            match = re.match(r'\s*sim_seconds\s+([0-9.]+)', line)
+                            if match:
+                                sim_seconds = float(match.group(1))
+                                break
+                    if sim_seconds == "N/A":
+                        print(f"警告: '{stats_file_path}' から 'sim_seconds' が見つかりませんでした。")
+                else:
+                    print(f"警告: '{stats_file_path}' が見つからないか、空です。")
+
+                print(f"  実行時間 (sim_seconds): {sim_seconds} 秒")
+
+            except FileNotFoundError:
+                print(f"エラー: コマンド '{gem5_command_args[0]}' が見つかりません。gem5へのパスが正しいか確認してください。")
+            except Exception as e:
+                print(f"予期せぬエラーが発生しました: {e}")
+
+            print(f"--- シミュレーション終了 ({current_sim_count}/{total_simulations}) ---\n")
 
     print("\nすべてのシミュレーション実行が完了しました。")
     print(f"結果は '{BASE_RESULTS_DIR}' ディレクトリ以下に保存されています。")
