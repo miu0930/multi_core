@@ -109,7 +109,7 @@ for core in CPU_CORES:
                     l2_latency_cycles = math.ceil(L2_access_time_ns / cpu_clock_cycle_time_ns)
 
                 # 総BCEコストの計算
-                total_bce_cost = core + (L1_size / 2) + (L2_size / 32) # コア数 + L1_BCE + L2_BCE
+                total_bce_cost = core + (core * L1_size / 2) + (L2_size / 32) # コア数 + L1_BCE + L2_BCE
 
                 new_row = {
                     'Core Number': int(core), # intにキャスト
