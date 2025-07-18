@@ -15,31 +15,31 @@ BASE_RESULTS_DIR = "./results_simulations" # 元のディレクトリ名に戻�
 # SPLASH-2 ベンチマーク定義
 # 各ベンチマークに固有の skip_threshold_seconds を追加
 BENCHMARKS = {
-    "fmm": {
-        "CMD": "./splash2/fmm/FMM",
-        "OPTIONS_FORMAT": "< ./splash2/fmm/inputs/input.2048.p{CORE}",
-        "skip_threshold_seconds": 900 # 例: 15分 (900秒)
-    },
+    # "fmm": {
+    #     "CMD": "./splash2/fmm/FMM",
+    #     "OPTIONS_FORMAT": "< ./splash2/fmm/inputs/input.2048.p{CORE}",
+    #     "skip_threshold_seconds": 900 # 例: 15分 (900秒)
+    # },
     "ocean": {
         "CMD": "./splash2/ocean/contiguous_partitions/OCEAN",
         "OPTIONS_FORMAT": "-n130 -p{CORE}",
         "skip_threshold_seconds": 1200 # 例: 20分 (1200秒)
     },
-    "raytrace": {
-        "CMD": "./splash2/raytrace/RAYTRACE",
-        "OPTIONS_FORMAT": "-p{CORE} ./splash2/raytrace/inputs/teapot.env",
-        "skip_threshold_seconds": 1800 # 例: 30分 (1800秒)
-    },
-    "cholesky": {
-        "CMD": "./splash2/cholesky/CHOLESKY",
-        "OPTIONS_FORMAT": "-p{CORE} ./splash2/cholesky/inputs/d750.O",
-        "skip_threshold_seconds": 2400 # 例: 40分 (2400秒)
-    },
-    "fft": {
-        "CMD": "./splash2/fft/FFT",
-        "OPTIONS_FORMAT": "-p{CORE}",
-        "skip_threshold_seconds": 60 # 例: 1分 (60秒) - FFTは速いため
-    },
+    # "raytrace": {
+    #     "CMD": "./splash2/raytrace/RAYTRACE",
+    #     "OPTIONS_FORMAT": "-p{CORE} ./splash2/raytrace/inputs/teapot.env",
+    #     "skip_threshold_seconds": 1800 # 例: 30分 (1800秒)
+    # },
+    # "cholesky": {
+    #     "CMD": "./splash2/cholesky/CHOLESKY",
+    #     "OPTIONS_FORMAT": "-p{CORE} ./splash2/cholesky/inputs/d750.O",
+    #     "skip_threshold_seconds": 2400 # 例: 40分 (2400秒)
+    # },
+    # "fft": {
+    #     "CMD": "./splash2/fft/FFT",
+    #     "OPTIONS_FORMAT": "-p{CORE}",
+    #     "skip_threshold_seconds": 60 # 例: 1分 (60秒) - FFTは速いため
+    # },
     "lu": {
         "CMD": "./splash2/lu/contiguous_blocks/LU",
         "OPTIONS_FORMAT": "-p{CORE}",
